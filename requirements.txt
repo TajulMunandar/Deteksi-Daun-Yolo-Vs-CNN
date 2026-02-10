@@ -1,0 +1,47 @@
+# YOLOv11 Leaf Detection - Requirements
+# ======================================
+
+# Ultralytics YOLOv11 (main package)
+ultralytics>=8.0.0
+
+# Flask API
+Flask>=2.3.0
+Flask-CORS>=4.0.0
+
+# PyTorch (CPU version - for systems without GPU)
+# torch>=2.0.0
+
+# PyTorch with CUDA support (uncomment if you have NVIDIA GPU)
+# torch>=2.0.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# Computer Vision
+opencv-python>=4.8.0
+
+# Image processing
+Pillow>=10.0.0
+numpy>=1.24.0
+
+# Data handling
+pandas>=2.0.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Utilities
+tqdm>=4.65.0
+PyYAML>=6.0.1
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Development
+black>=23.0.0
+flake8>=6.0.0
+
+# Note: For CUDA support, install PyTorch separately with:
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# For NVIDIA GPU with CUDA 12.1:
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121

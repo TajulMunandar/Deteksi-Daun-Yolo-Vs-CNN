@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 5
+names: ['daun jeruk', 'daun kari', 'daun kunyit', 'daun pandan', 'daun salam']
+
+roboflow:
+  workspace: detect-rupiah
+  project: deteksi-daun-eiqq3
+  version: 4
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/detect-rupiah/deteksi-daun-eiqq3/dataset/4

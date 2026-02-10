@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# YOLO/Dataset
+runs/
+*.pt
+*.pth
+*.weights
+labels.cache
+cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+.env
+*.log
+
+# Data (optional - uncomment if you want to exclude the dataset folder)
+# Deteksi_Daun.v4i.yolov11/
