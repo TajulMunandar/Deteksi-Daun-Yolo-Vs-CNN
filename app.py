@@ -143,6 +143,19 @@ def health_check():
     })
 
 
+# Debug/test endpoint without model processing
+@app.route('/test', methods=['GET', 'POST'])
+def test_endpoint():
+    """Simple test endpoint to verify server is responding."""
+    return jsonify({
+        "status": "ok",
+        "message": "Server is running",
+        "method": request.method,
+        "yolo_loaded": yolo_model is not None,
+        "cnn_loaded": cnn_model is not None
+    })
+
+
 # Get classes endpoint
 @app.route('/classes', methods=['GET'])
 def get_classes():
@@ -158,7 +171,7 @@ def get_classes():
 
 
 # Helper function for YOLO prediction
-def _predict_yolo_internal(image_file):
+def _predict_yolo_internal(image_file, include_image=True):
     """Internal YOLO prediction function."""
     global yolo_model
     
@@ -166,6 +179,9 @@ def _predict_yolo_internal(image_file):
         return None, "YOLO model not loaded"
     
     try:
+        # Reset file position
+        image_file.seek(0)
+        
         # Preprocess image
         img = Image.open(image_file)
         if img.mode != 'RGB':
@@ -203,52 +219,60 @@ def _predict_yolo_internal(image_file):
                 }
                 detections.append(detection)
         
-        # Draw bounding boxes
-        annotated_img = img_array.copy()
-        
-        if results.boxes is not None and len(results.boxes) > 0:
-            boxes = results.boxes.xyxy.cpu().numpy()
-            confs = results.boxes.conf.cpu().numpy()
-            cls = results.boxes.cls.cpu().numpy()
+        # Create visualization only if requested
+        annotated_img_base64 = None
+        if include_image:
+            annotated_img = img_array.copy()
             
-            colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (255, 255, 0), (0, 255, 255)]
+            if results.boxes is not None and len(results.boxes) > 0:
+                boxes = results.boxes.xyxy.cpu().numpy()
+                confs = results.boxes.conf.cpu().numpy()
+                cls = results.boxes.cls.cpu().numpy()
+                
+                colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (255, 255, 0), (0, 255, 255)]
+                
+                for box, conf, c in zip(boxes, confs, cls):
+                    x1, y1, x2, y2 = box.astype(int)
+                    color = colors[int(c) % len(colors)]
+                    
+                    cv2.rectangle(annotated_img, (x1, y1), (x2, y2), color, 2)
+                    
+                    class_name = yolo_model.names.get(int(c), f"class_{c}")
+                    label = f"{class_name}: {conf:.2f}"
+                    
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    font_scale = 0.5
+                    thickness = 2
+                    (tw, th), _ = cv2.getTextSize(label, font, font_scale, thickness)
+                    
+                    cv2.rectangle(annotated_img, (x1, y1 - th - 10), (x1 + tw, y1), color, -1)
+                    cv2.putText(annotated_img, label, (x1, y1 - 5), font, font_scale, (255, 255, 255), thickness)
             
-            for box, conf, c in zip(boxes, confs, cls):
-                x1, y1, x2, y2 = box.astype(int)
-                color = colors[int(c) % len(colors)]
-                
-                cv2.rectangle(annotated_img, (x1, y1), (x2, y2), color, 2)
-                
-                class_name = yolo_model.names.get(int(c), f"class_{c}")
-                label = f"{class_name}: {conf:.2f}"
-                
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                font_scale = 0.5
-                thickness = 2
-                (tw, th), _ = cv2.getTextSize(label, font, font_scale, thickness)
-                
-                cv2.rectangle(annotated_img, (x1, y1 - th - 10), (x1 + tw, y1), color, -1)
-                cv2.putText(annotated_img, label, (x1, y1 - 5), font, font_scale, (255, 255, 255), thickness)
+            _, buffer = cv2.imencode('.jpg', annotated_img)
+            annotated_img_base64 = base64.b64encode(buffer).decode('utf-8')
         
-        _, buffer = cv2.imencode('.jpg', annotated_img)
-        annotated_img_base64 = base64.b64encode(buffer).decode('utf-8')
-        
-        return {
+        result = {
             "success": True,
             "model": "yolov11",
             "task": "object_detection",
             "predictions": detections,
-            "total_detections": len(detections),
-            "annotated_image": annotated_img_base64
-        }, None
+            "total_detections": len(detections)
+        }
+        
+        if annotated_img_base64:
+            result["annotated_image"] = annotated_img_base64
+        
+        return result, None
         
     except Exception as e:
+        import traceback
         print(f"❌ YOLO Prediction error: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
         return None, str(e)
 
 
 # Helper function for CNN prediction
-def _predict_cnn_internal(image_file):
+def _predict_cnn_internal(image_file, include_image=True):
     """Internal CNN prediction function."""
     global cnn_model, device
     
@@ -256,6 +280,9 @@ def _predict_cnn_internal(image_file):
         return None, "CNN model not loaded"
     
     try:
+        # Reset file position
+        image_file.seek(0)
+        
         # Preprocess image
         img = Image.open(image_file)
         if img.mode != 'RGB':
@@ -274,15 +301,14 @@ def _predict_cnn_internal(image_file):
         with torch.no_grad():
             outputs = cnn_model(img_tensor)
             probs = torch.softmax(outputs, dim=1)
-            # Get confidence from softmax probabilities (0-1 range), not raw logits
             confidence, predicted = probs.max(1)
         
         # Get prediction details
         pred_class = cnn_classes[predicted.item()]
-        pred_confidence = confidence.item()  # This is now 0-1 range
+        pred_confidence = confidence.item()
         
         probabilities = {
-            cnn_classes[i]: float(probs[0][i])  # Already 0-1 range from softmax
+            cnn_classes[i]: float(probs[0][i])
             for i in range(len(cnn_classes))
         }
         
@@ -293,47 +319,55 @@ def _predict_cnn_internal(image_file):
             reverse=True
         )[:3]
         
-        # Create visualization
-        img_array = np.array(img)
+        # Create visualization only if requested
+        annotated_img_base64 = None
+        if include_image:
+            # Create visualization
+            img_array = np.array(img)
+            
+            # Draw classification result
+            overlay = img_array.copy()
+            cv2.rectangle(overlay, (10, 10), (350, 180), (0, 0, 0), -1)
+            cv2.addWeighted(overlay, 0.6, img_array, 0.4, 0, img_array)
+            
+            # Add text
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            cv2.putText(img_array, f"CNN Classification", (20, 35), font, 0.7, (0, 255, 0), 2)
+            cv2.putText(img_array, f"Class: {pred_class}", (20, 65), font, 0.6, (255, 255, 255), 1)
+            cv2.putText(img_array, f"Confidence: {pred_confidence*100:.1f}%", (20, 90), font, 0.6, (255, 255, 255), 1)
+            
+            # Draw probability bar
+            bar_x, bar_y = 20, 105
+            bar_width = 200
+            bar_height = 15
+            
+            cv2.rectangle(img_array, (bar_x, bar_y), (bar_x + bar_width, bar_y + bar_height), (100, 100, 100), -1)
+            cv2.rectangle(img_array, (bar_x, bar_y), 
+                         (bar_x + int(bar_width * pred_confidence), bar_y + bar_height), 
+                         (0, 255, 0), -1)
+            
+            _, buffer = cv2.imencode('.jpg', img_array)
+            annotated_img_base64 = base64.b64encode(buffer).decode('utf-8')
         
-        # Draw classification result
-        overlay = img_array.copy()
-        cv2.rectangle(overlay, (10, 10), (350, 180), (0, 0, 0), -1)
-        cv2.addWeighted(overlay, 0.6, img_array, 0.4, 0, img_array)
-        
-        # Add text
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        cv2.putText(img_array, f"CNN Classification", (20, 35), font, 0.7, (0, 255, 0), 2)
-        cv2.putText(img_array, f"Class: {pred_class}", (20, 65), font, 0.6, (255, 255, 255), 1)
-        cv2.putText(img_array, f"Confidence: {pred_confidence*100:.1f}%", (20, 90), font, 0.6, (255, 255, 255), 1)
-        
-        # Draw probability bar
-        bar_x, bar_y = 20, 105
-        bar_width = 200
-        bar_height = 15
-        
-        cv2.rectangle(img_array, (bar_x, bar_y), (bar_x + bar_width, bar_y + bar_height), (100, 100, 100), -1)
-        # pred_confidence is now 0-1 range from softmax, multiply by 100 for bar width
-        cv2.rectangle(img_array, (bar_x, bar_y), 
-                     (bar_x + int(bar_width * pred_confidence), bar_y + bar_height), 
-                     (0, 255, 0), -1)
-        
-        _, buffer = cv2.imencode('.jpg', img_array)
-        annotated_img_base64 = base64.b64encode(buffer).decode('utf-8')
-        
-        return {
+        result = {
             "success": True,
             "model": "cnn",
             "task": "image_classification",
             "predicted_class": pred_class,
             "confidence": pred_confidence,
             "probabilities": probabilities,
-            "top_predictions": top_predictions,
-            "annotated_image": annotated_img_base64
-        }, None
+            "top_predictions": top_predictions
+        }
+        
+        if annotated_img_base64:
+            result["annotated_image"] = annotated_img_base64
+        
+        return result, None
         
     except Exception as e:
+        import traceback
         print(f"❌ CNN Prediction error: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
         return None, str(e)
 
 
@@ -342,6 +376,10 @@ def _predict_cnn_internal(image_file):
 def predict_yolo():
     """
     YOLOv11 Prediction endpoint for leaf detection.
+    
+    Parameters:
+        - image: The image file to detect
+        - include_image: 'true' (default) or 'false' to skip annotated image
     
     Returns bounding boxes with classifications.
     """
@@ -355,7 +393,10 @@ def predict_yolo():
     if not filename.endswith(('.png', '.jpg', '.jpeg', '.bmp', '.webp')):
         return jsonify({"error": "Invalid file type"}), 400
     
-    result, error = _predict_yolo_internal(image_file)
+    # Check if we should include the annotated image
+    include_image = request.form.get('include_image', 'false').lower() != 'false'
+    
+    result, error = _predict_yolo_internal(image_file, include_image=include_image)
     
     if error:
         return jsonify({"error": f"YOLO prediction failed: {error}"}), 500
@@ -369,6 +410,10 @@ def predict_cnn():
     """
     CNN Prediction endpoint for leaf classification.
     
+    Parameters:
+        - image: The image file to classify
+        - include_image: 'true' (default) or 'false' to skip annotated image
+    
     Returns single image-level classification.
     """
     if 'image' not in request.files:
@@ -381,7 +426,10 @@ def predict_cnn():
     if not filename.endswith(('.png', '.jpg', '.jpeg', '.bmp', '.webp')):
         return jsonify({"error": "Invalid file type"}), 400
     
-    result, error = _predict_cnn_internal(image_file)
+    # Check if we should include the annotated image
+    include_image = request.form.get('include_image', 'true').lower() != 'false'
+    
+    result, error = _predict_cnn_internal(image_file, include_image=include_image)
     
     if error:
         return jsonify({"error": f"CNN prediction failed: {error}"}), 500
@@ -404,10 +452,13 @@ def predict():
     image_data = image_file.read()
     image_filename = image_file.filename
     
+    # Check if we should include the annotated image
+    include_image = request.form.get('include_image', 'false').lower() != 'false'
+    
     if model_type == 'yolo':
         # Reset file position for YOLO
         image_file = FileStorage(io.BytesIO(image_data), filename=image_filename)
-        result, error = _predict_yolo_internal(image_file)
+        result, error = _predict_yolo_internal(image_file, include_image=include_image)
         if error:
             return jsonify({"error": f"YOLO prediction failed: {error}"}), 500
         return jsonify(result)
@@ -415,7 +466,7 @@ def predict():
     elif model_type == 'cnn':
         # Reset file position for CNN
         image_file = FileStorage(io.BytesIO(image_data), filename=image_filename)
-        result, error = _predict_cnn_internal(image_file)
+        result, error = _predict_cnn_internal(image_file, include_image=include_image)
         if error:
             return jsonify({"error": f"CNN prediction failed: {error}"}), 500
         return jsonify(result)
@@ -427,11 +478,11 @@ def predict():
         
         # YOLO
         yolo_file = FileStorage(io.BytesIO(image_data), filename=image_filename)
-        yolo_result, yolo_error = _predict_yolo_internal(yolo_file)
+        yolo_result, yolo_error = _predict_yolo_internal(yolo_file, include_image=include_image)
         
         # CNN
         cnn_file = FileStorage(io.BytesIO(image_data), filename=image_filename)
-        cnn_result, cnn_error = _predict_cnn_internal(cnn_file)
+        cnn_result, cnn_error = _predict_cnn_internal(cnn_file, include_image=include_image)
         
         return jsonify({
             "success": True,
