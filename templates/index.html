@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leaf Detection - YOLOv11</title>
+    <title>Leaf Detection - YOLOv11 vs CNN</title>
     <style>
         * {
             margin: 0;
@@ -19,7 +19,7 @@
         }
         
         .container {
-            max-width: 900px;
+            max-width: 1200px;
             margin: 0 auto;
             background: white;
             border-radius: 15px;
@@ -41,6 +41,52 @@
         
         .header p {
             opacity: 0.8;
+        }
+        
+        .model-tabs {
+            display: flex;
+            background: #f8f9ff;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .model-tab {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            font-size: 1em;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.3s ease;
+        }
+        
+        .model-tab.active {
+            background: white;
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        .model-tab:hover:not(.active) {
+            background: #e8ecff;
+        }
+        
+        .model-info {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 10px 20px;
+            font-size: 0.9em;
+            display: none;
+        }
+        
+        .model-info.active {
+            display: block;
+        }
+        
+        .model-info.warning {
+            background: #fff3e0;
+            color: #e65100;
         }
         
         .content {
@@ -99,7 +145,7 @@
         .image-box {
             flex: 1;
             min-width: 300px;
-            max-width: 450px;
+            max-width: 500px;
         }
         
         .image-box h3 {
@@ -245,6 +291,7 @@
             background: #f8f9ff;
             border-radius: 5px;
             margin-bottom: 20px;
+            flex-wrap: wrap;
         }
         
         .status-dot {
@@ -257,19 +304,97 @@
         .status-dot.connected {
             background: #28a745;
         }
+        
+        .model-badge {
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.85em;
+            margin-left: 10px;
+        }
+        
+        .model-badge.yolo {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .model-badge.cnn {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+        
+        .classification-result {
+            background: linear-gradient(135deg, #f5f5f5 0%, #eeeeee 100%);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 15px;
+        }
+        
+        .classification-result h4 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .prob-bar {
+            margin: 8px 0;
+        }
+        
+        .prob-bar-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+            font-size: 0.9em;
+        }
+        
+        .prob-bar-bg {
+            background: #e0e0e0;
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .prob-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            transition: width 0.5s ease;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🌿 Deteksi Daun YOLOv11</h1>
-            <p>Sistem Deteksi Objek untuk Identifikasi Jenis Daun</p>
+            <h1>🌿 Deteksi Daun YOLOv11 vs CNN</h1>
+            <p>Sistem Perbandingan Model untuk Identifikasi Jenis Daun</p>
+        </div>
+        
+        <div class="model-tabs">
+            <button class="model-tab active" data-model="yolo">
+                🎯 YOLOv11 (Deteksi Objek)
+            </button>
+            <button class="model-tab" data-model="cnn">
+                🧠 CNN (Klasifikasi)
+            </button>
+            <button class="model-tab" data-model="both">
+                ⚖️ Bandingkan Kedua
+            </button>
+        </div>
+        
+        <div class="model-info" id="yoloInfo">
+            <strong>YOLOv11:</strong> Deteksi objek dengan bounding box. Cocok untuk gambar dengan banyak daun.
+        </div>
+        <div class="model-info" id="cnnInfo">
+            <strong>CNN:</strong> Klasifikasi gambar keseluruhan. Cocok untuk gambar single leaf.
+        </div>
+        <div class="model-info warning" id="bothInfo">
+            <strong>Perbandingan:</strong> Menjalankan kedua model sekaligus untuk perbandingan hasil.
         </div>
         
         <div class="content">
             <div class="api-status">
                 <div class="status-dot" id="statusDot"></div>
                 <span id="statusText">Memeriksa koneksi API...</span>
+                <span class="model-badge yolo" id="yoloStatus">YOLO: ❌</span>
+                <span class="model-badge cnn" id="cnnStatus">CNN: ❌</span>
             </div>
             
             <div class="upload-section" id="uploadSection">
@@ -284,7 +409,7 @@
             
             <div class="loading" id="loading">
                 <div class="spinner"></div>
-                <p>Sedang memproses gambar...</p>
+                <p id="loadingText">Sedang memproses gambar...</p>
             </div>
             
             <div class="error-message" id="errorMessage"></div>
@@ -295,45 +420,92 @@
                         <h3>📷 Gambar Asli</h3>
                         <img id="originalImage" src="" alt="Original Image">
                     </div>
-                    <div class="image-box">
-                        <h3>🎯 Hasil Deteksi</h3>
+                    <div class="image-box" id="resultBox">
+                        <h3 id="resultTitle">🎯 Hasil Deteksi</h3>
                         <img id="resultImage" src="" alt="Result Image">
                     </div>
                 </div>
             </div>
             
             <div class="results-section" id="resultsSection">
-                <h3>📊 Hasil Deteksi</h3>
+                <h3>📊 Hasil Analisis</h3>
                 
-                <div class="stats-grid" id="statsGrid">
-                    <div class="stat-card">
-                        <div class="number" id="totalDetections">0</div>
-                        <div class="label">Total Deteksi</div>
+                <!-- YOLO Results -->
+                <div id="yoloResults" style="display: none;">
+                    <h4 style="color: #1976d2; margin-bottom: 10px;">🎯 YOLOv11 - Deteksi Objek</h4>
+                    <div class="stats-grid" id="yoloStatsGrid">
+                        <div class="stat-card">
+                            <div class="number" id="totalDetections">0</div>
+                            <div class="label">Total Deteksi</div>
+                        </div>
                     </div>
+                    <div id="yoloDetectionsList"></div>
                 </div>
                 
-                <div id="detectionsList"></div>
+                <!-- CNN Results -->
+                <div id="cnnResults" style="display: none;">
+                    <h4 style="color: #7b1fa2; margin: 20px 0 10px;">🧠 CNN - Klasifikasi Gambar</h4>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="number" id="cnnClass">-</div>
+                            <div class="label">Klasifikasi</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="number" id="cnnConfidence">-</div>
+                            <div class="label">Kepercayaan</div>
+                        </div>
+                    </div>
+                    <div class="classification-result" id="cnnProbabilities"></div>
+                </div>
             </div>
         </div>
     </div>
     
     <script>
         const API_URL = 'http://localhost:5000';
+        let currentModel = 'yolo';
+        
+        // Model tab handling
+        document.querySelectorAll('.model-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.model-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                currentModel = this.dataset.model;
+                
+                document.querySelectorAll('.model-info').forEach(info => info.classList.remove('active'));
+                document.getElementById(currentModel + 'Info').classList.add('active');
+            });
+        });
         
         // Check API connection
         async function checkApiStatus() {
             const statusDot = document.getElementById('statusDot');
             const statusText = document.getElementById('statusText');
+            const yoloStatus = document.getElementById('yoloStatus');
+            const cnnStatus = document.getElementById('cnnStatus');
             
             try {
                 const response = await fetch(`${API_URL}/health`);
                 const data = await response.json();
                 
-                if (data.model_loaded) {
+                const yoloLoaded = data.yolo_loaded;
+                const cnnLoaded = data.cnn_loaded;
+                const anyLoaded = yoloLoaded || cnnLoaded;
+                
+                if (anyLoaded) {
                     statusDot.classList.add('connected');
                     statusText.textContent = `✅ API Terhubung - ${data.device.toUpperCase()}`;
+                    
+                    yoloStatus.textContent = yoloLoaded ? 'YOLO: ✅' : 'YOLO: ❌';
+                    cnnStatus.textContent = cnnLoaded ? 'CNN: ✅' : 'CNN: ❌';
+                    
+                    // Update info banner
+                    if (!yoloLoaded && !cnnLoaded) {
+                        showError('Tidak ada model yang dimuat. Harap latih model terlebih dahulu.');
+                    }
                 } else {
                     statusText.textContent = '⚠️ Model belum dimuat';
+                    showError('Model belum dimuat. Jalankan server dengan model yang sudah dilatih.');
                 }
             } catch (error) {
                 statusDot.style.background = '#dc3545';
@@ -346,11 +518,26 @@
             const file = e.target.files[0];
             if (!file) return;
             
+            // Check which endpoint to use
+            let endpoint = '/predict';
+            let modelParam = currentModel;
+            
+            if (currentModel === 'yolo') {
+                endpoint = '/predict/yolo';
+            } else if (currentModel === 'cnn') {
+                endpoint = '/predict/cnn';
+            } else {
+                endpoint = '/predict';
+            }
+            
             // Reset UI
             hideError();
             document.getElementById('previewSection').classList.remove('active');
             document.getElementById('resultsSection').classList.remove('active');
+            document.getElementById('yoloResults').style.display = 'none';
+            document.getElementById('cnnResults').style.display = 'none';
             document.getElementById('loading').classList.add('active');
+            document.getElementById('loadingText').textContent = 'Sedang memproses gambar...';
             
             // Show original image
             const originalImage = document.getElementById('originalImage');
@@ -361,26 +548,48 @@
             formData.append('image', file);
             
             try {
-                const response = await fetch(`${API_URL}/predict`, {
+                const response = await fetch(`${API_URL}${endpoint}`, {
                     method: 'POST',
                     body: formData
                 });
                 
                 const data = await response.json();
                 
-                if (!data.success) {
+                if (!data.success && !data.yolo_detection) {
                     throw new Error(data.error || 'Terjadi kesalahan');
                 }
                 
                 // Show result image
                 const resultImage = document.getElementById('resultImage');
-                resultImage.src = `data:image/jpeg;base64,${data.annotated_image}`;
+                
+                if (currentModel === 'yolo' && data.annotated_image) {
+                    resultImage.src = `data:image/jpeg;base64,${data.annotated_image}`;
+                    document.getElementById('resultTitle').textContent = '🎯 Hasil Deteksi YOLOv11';
+                    displayYoloResults(data.predictions || []);
+                } else if (currentModel === 'cnn' && data.annotated_image) {
+                    resultImage.src = `data:image/jpeg;base64,${data.annotated_image}`;
+                    document.getElementById('resultTitle').textContent = '🧠 Hasil Klasifikasi CNN';
+                    displayCnnResults(data);
+                } else if (currentModel === 'both') {
+                    // Handle both model results
+                    if (data.yolo_detection && data.yolo_detection.annotated_image) {
+                        resultImage.src = `data:image/jpeg;base64,${data.yolo_detection.annotated_image}`;
+                    } else if (data.annotated_image) {
+                        resultImage.src = `data:image/jpeg;base64,${data.annotated_image}`;
+                    }
+                    document.getElementById('resultTitle').textContent = '⚖️ Hasil Perbandingan';
+                    
+                    if (data.yolo_detection) {
+                        displayYoloResults(data.yolo_detection.predictions || []);
+                    }
+                    if (data.cnn_classification) {
+                        displayCnnResults(data.cnn_classification);
+                    }
+                }
                 
                 // Show preview
                 document.getElementById('previewSection').classList.add('active');
-                
-                // Show results
-                displayResults(data.predictions);
+                document.getElementById('resultsSection').classList.add('active');
                 
             } catch (error) {
                 showError('Gagal memproses gambar: ' + error.message);
@@ -389,9 +598,10 @@
             }
         });
         
-        function displayResults(predictions) {
-            const statsGrid = document.getElementById('statsGrid');
-            const detectionsList = document.getElementById('detectionsList');
+        function displayYoloResults(predictions) {
+            document.getElementById('yoloResults').style.display = 'block';
+            
+            const detectionsList = document.getElementById('yoloDetectionsList');
             
             // Update stats
             document.getElementById('totalDetections').textContent = predictions.length;
@@ -414,7 +624,7 @@
                         <div class="detection-info">
                             <span><strong>Jenis Daun:</strong> ${pred.detected_class}</span>
                             <span class="confidence-badge ${confidenceClass}">
-                                ${(confidence * 100).toFixed(1)}%
+                                ${(confidence >= 1 ? (confidence).toFixed(1) : (confidence * 100).toFixed(1))}%
                             </span>
                             <span><strong>x1:</strong> ${pred.bounding_box.x1.toFixed(0)}</span>
                             <span><strong>y1:</strong> ${pred.bounding_box.y1.toFixed(0)}</span>
@@ -425,8 +635,41 @@
                     detectionsList.appendChild(div);
                 });
             }
+        }
+        
+        function displayCnnResults(data) {
+            document.getElementById('cnnResults').style.display = 'block';
             
-            document.getElementById('resultsSection').classList.add('active');
+            // Update classification result
+            document.getElementById('cnnClass').textContent = data.predicted_class || '-';
+            document.getElementById('cnnConfidence').textContent = data.confidence ? 
+                `${(data.confidence * 100).toFixed(1)}%` : '-';
+            
+            // Display probabilities
+            const probContainer = document.getElementById('cnnProbabilities');
+            probContainer.innerHTML = '<h4>📊 Probabilitas Tiap Kelas</h4>';
+            
+            if (data.probabilities) {
+                // Sort by probability
+                const sortedProbs = Object.entries(data.probabilities)
+                    .sort((a, b) => b[1] - a[1]);
+                
+                sortedProbs.forEach(([className, prob]) => {
+                    const percentage = (prob * 100 > 100 ? prob : prob * 100).toFixed(1);
+                    const div = document.createElement('div');
+                    div.className = 'prob-bar';
+                    div.innerHTML = `
+                        <div class="prob-bar-label">
+                            <span>${className}</span>
+                            <span>${percentage}%</span>
+                        </div>
+                        <div class="prob-bar-bg">
+                            <div class="prob-bar-fill" style="width: ${prob > 1 ? 100 : prob * 100}%"></div>
+                        </div>
+                    `;
+                    probContainer.appendChild(div);
+                });
+            }
         }
         
         function showError(message) {

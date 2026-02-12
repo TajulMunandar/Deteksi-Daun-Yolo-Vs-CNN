@@ -1,19 +1,44 @@
-# YOLOv11 Leaf Detection System
+# YOLOv11 vs CNN Leaf Detection System
 
-An end-to-end object detection system for leaf detection using YOLOv11. This project provides training, evaluation, testing, and a Flask REST API for leaf detection inference.
+An end-to-end comparison system for leaf detection and classification using YOLOv11 (Object Detection) and CNN (Image Classification). This project provides training, evaluation, testing, and a Flask REST API for both models, designed for thesis research comparing the two approaches.
 
 ## Table of Contents
 
+- [Overview](#overview)
 - [Prerequisites](#prerequisites)
 - [Dataset Structure](#dataset-structure)
 - [Installation](#installation)
-- [Training](#training)
+- [CNN Training](#cnn-training)
+- [YOLOv11 Training](#yolov11-training)
 - [Evaluation](#evaluation)
-- [Testing](#testing)
+- [Model Comparison](#model-comparison)
 - [Flask API](#flask-api)
+- [Web Interface](#web-interface)
 - [Project Structure](#project-structure)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
+
+---
+
+## Overview
+
+This system compares two approaches for leaf classification:
+
+| Feature | YOLOv11 | CNN |
+|---------|----------|-----|
+| **Task** | Object Detection | Image Classification |
+| **Output** | Bounding boxes + Class | Single Class |
+| **Multi-object** | ✅ Yes | ❌ No |
+| **Localization** | ✅ Yes | ❌ No |
+| **Speed** | Real-time | Very Fast |
+| **Accuracy** | Good | Excellent (single object) |
+
+**Leaf Classes:**
+- daun jeruk (citrus leaf)
+- daun kari (curry leaf)
+- daun kunyit (turmeric leaf)
+- daun pandan (pandan leaf)
+- daun salam (bay leaf)
 
 ---
 
@@ -31,7 +56,7 @@ An end-to-end object detection system for leaf detection using YOLOv11. This pro
 The dataset should be structured as follows:
 
 ```
-Deteksi_Daun.v2i.yolov11/
+Deteksi_Daun.v4i.yolov11/
 ├── train/
 │   ├── images/          # Training images
 │   └── labels/          # Training labels (YOLO format)
@@ -42,11 +67,6 @@ Deteksi_Daun.v2i.yolov11/
 │   ├── images/          # Test images
 │   └── labels/          # Test labels
 └── data.yaml            # Dataset configuration
-```
-
-If you have the zip file, extract it first:
-```bash
-unzip "Deteksi Daun.v2i.yolov11.zip"
 ```
 
 ---
@@ -78,7 +98,57 @@ pip install -r requirements.txt
 
 ---
 
-## Training
+## CNN Training
+
+### Basic Training
+
+```bash
+python cnn_training.py
+```
+
+### Custom Training Parameters
+
+```bash
+# Train with custom CNN architecture
+python cnn_training.py --model custom --epochs 50 --batch 32
+
+# Train with EfficientNet transfer learning
+python cnn_training.py --model efficient --epochs 30 --batch 16
+
+# Train with ResNet transfer learning
+python cnn_training.py --model resnet --epochs 30 --batch 16
+```
+
+### CNN Training Options
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--model` | custom | Model type: custom, efficient, resnet |
+| `--epochs` | 20 | Number of training epochs |
+| `--batch` | 16 | Batch size |
+| `--lr` | 0.001 | Learning rate |
+| `--img-size` | 224 | Input image size |
+| `--no-pretrained` | False | Disable pretrained weights |
+| `--dropout` | 0.5 | Dropout rate |
+
+### CNN Model Architectures
+
+| Model | Parameters | Accuracy | Speed |
+|-------|------------|----------|-------|
+| custom | ~2M | Good | Fast |
+| efficientnet-b0 | 5.3M | Better | Medium |
+| resnet-34 | 21.8M | Best | Slower |
+
+### CNN Training Output
+
+Results are saved to:
+- `runs/cnn/best_model.pth` - Best model weights
+- `runs/cnn/training_history.png` - Training curves
+- `runs/cnn/training_results.json` - Final metrics
+
+---
+
+## YOLOv11 Training
 
 ### Basic Training
 
@@ -89,20 +159,10 @@ python training.py
 ### Custom Training Parameters
 
 ```bash
-python training.py --model yolov11n.pt --epochs 100 --batch 32
+python training.py --epochs 100 --batch 32
 ```
 
-### Training Configuration
-
-The default training configuration:
-- **Model**: YOLOv11n (nano) - change `MODEL_SIZE` in training.py
-- **Image Size**: 640
-- **Batch Size**: 16 (auto-adjusted based on GPU memory)
-- **Epochs**: 50
-- **Optimizer**: AdamW
-- **Learning Rate**: 0.01 (initial), 0.0001 (final)
-
-### Model Sizes
+### YOLOv11 Model Sizes
 
 | Size | Parameters | Speed | Accuracy |
 |------|------------|-------|----------|
@@ -117,90 +177,69 @@ Edit `training.py` to change model size:
 MODEL_SIZE = "n"  # Change to 's', 'm', 'l', or 'x'
 ```
 
-### Training Output
+### YOLOv11 Training Output
 
-Training results are saved to:
+Results are saved to:
 - `runs/detect/leaf_detection/weights/best.pt` - Best model
 - `runs/detect/leaf_detection/weights/last.pt` - Last checkpoint
-- `runs/detect/leaf_detection/` - Training plots and metrics
 
 ---
 
 ## Evaluation
 
-Evaluate the trained model on the validation set:
+### CNN Evaluation
 
-### Basic Evaluation
+```bash
+python cnn_evaluate.py --model runs/cnn/best_model.pth
+```
+
+CNN metrics include:
+- Accuracy, Precision, Recall, F1-Score
+- Confusion Matrix
+- Per-class Performance
+- ROC-AUC Curves
+
+### YOLOv11 Evaluation
 
 ```bash
 python evaluate.py
 ```
 
-### Custom Evaluation
-
-```bash
-python evaluate.py --model runs/detect/leaf_detection/weights/best.pt --conf 0.3
-```
-
-### Evaluation Metrics
-
-The evaluation script provides:
-- **Precision**: Overall precision score
-- **Recall**: Overall recall score
-- **mAP50**: Mean Average Precision at IoU 0.50
-- **mAP50-95**: Mean Average Precision at IoU 0.50-0.95
-- **Confusion Matrix**: Visual representation of predictions
-
-### Output
-
-Evaluation results are saved to:
-- `runs/detect/confusion_matrix.png` - Confusion matrix visualization
-- `runs/detect/` - Evaluation metrics
+YOLOv11 metrics include:
+- Precision, Recall
+- mAP50, mAP50-95
+- Confusion Matrix
 
 ---
 
-## Testing
+## Model Comparison
 
-Run inference on test images:
-
-### Basic Testing
+### Compare Both Models
 
 ```bash
-python test.py
+python compare_models.py --show-arch
 ```
 
-### Custom Testing
+This script:
+1. Runs both models on test data
+2. Calculates accuracy metrics
+3. Measures inference time
+4. Generates comparison charts
+5. Shows architecture differences
 
-```bash
-python test.py \
-    --model runs/detect/leaf_detection/weights/best.pt \
-    --source Deteksi_Daun.v2i.yolov11/test/images \
-    --output runs/detect/test \
-    --conf 0.3
-```
+### Comparison Output
 
-### Testing Options
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--model` | auto | Path to trained model |
-| `--source` | test/images | Path to test images |
-| `--output` | runs/detect/test | Output directory |
-| `--conf` | 0.25 | Confidence threshold |
-| `--iou` | 0.45 | IoU threshold |
-
-### Output
-
-Test results are saved to:
-- `runs/detect/test/` - Predicted images with bounding boxes
-- `runs/detect/test/labels/` - YOLO format predictions (.txt)
-- `runs/detect/test/predictions.json` - JSON format predictions
+Results saved to:
+- `runs/model_comparison_results.json` - Detailed metrics
+- `runs/metrics_comparison.png` - Accuracy comparison chart
+- `runs/confusion_matrices_comparison.png` - Both confusion matrices
+- `runs/complexity_comparison.png` - Model size/complexity comparison
 
 ---
 
 ## Flask API
 
-A REST API for leaf detection inference.
+A REST API supporting both YOLOv11 and CNN models.
 
 ### Start the API Server
 
@@ -221,7 +260,8 @@ Response:
 ```json
 {
   "status": "healthy",
-  "model_loaded": true,
+  "yolo_loaded": true,
+  "cnn_loaded": true,
   "device": "cuda"
 }
 ```
@@ -231,118 +271,138 @@ Response:
 curl http://localhost:5000/classes
 ```
 
-#### Predict (Multipart Form)
+#### YOLO Prediction (Detection)
 ```bash
-curl -X POST \
-    -F "image=@path/to/leaf.jpg" \
-    http://localhost:5000/predict
+curl -X POST -F "image=@leaf.jpg" http://localhost:5000/predict/yolo
 ```
 
-#### Predict (Base64)
+#### CNN Prediction (Classification)
 ```bash
-curl -X POST \
-    -H "Content-Type: application/json" \
-    -d '{"image": "<base64_encoded_image>"}' \
-    http://localhost:5000/predict/base64
+curl -X POST -F "image=@leaf.jpg" http://localhost:5000/predict/cnn
 ```
 
-### Predict Response Format
+#### Both Models (Comparison)
+```bash
+curl -X POST -F "image=@leaf.jpg" http://localhost:5000/predict
+```
 
-```json
-{
-  "success": true,
-  "predictions": [
-    {
-      "detected_class": "daun_jeruk",
-      "confidence": 0.95,
-      "bounding_box": {
-        "x1": 100.5,
-        "y1": 50.2,
-        "x2": 300.8,
-        "y2": 250.6
-      }
-    }
-  ],
-  "total_detections": 1,
-  "annotated_image": "<base64_encoded_image_with_boxes>"
-}
+#### Model Comparison Info
+```bash
+curl http://localhost:5000/compare
 ```
 
 ### API Configuration
 
-Set environment variables to customize the API:
+Set environment variables:
 
 ```bash
-# Set model path
-export MODEL_PATH=runs/detect/leaf_detection/weights/best.pt
+# YOLO model path
+export YOLO_MODEL_PATH=runs/detect/leaf_detection/weights/best.pt
 
-# Set confidence threshold
-export CONFIDENCE_THRESHOLD=0.3
+# CNN model path
+export CNN_MODEL_PATH=runs/cnn/best_model.pth
 
-# Set port
+# Confidence threshold
+export YOLO_CONFIDENCE=0.3
+
+# Server port
 export PORT=5000
-
-# Enable debug mode
-export DEBUG=true
 
 python app.py
 ```
 
 ---
 
+## Web Interface
+
+Open `http://localhost:5000` in your browser.
+
+### Features:
+- **Model Selection Tabs**: Switch between YOLO, CNN, or Comparison mode
+- **Image Upload**: Drag & drop or click to select images
+- **Visual Results**: See annotated images with detections/classifications
+- **Confidence Display**: View confidence scores for each prediction
+- **API Status**: Shows which models are loaded
+
+### Using the Interface:
+
+1. Select a model tab:
+   - 🎯 **YOLOv11** - For object detection with bounding boxes
+   - 🧠 **CNN** - For simple image classification
+   - ⚖️ **Compare** - Run both models together
+
+2. Click "Pilih Gambar Daun" to upload an image
+
+3. View results:
+   - YOLO: Shows detected leaves with bounding boxes
+   - CNN: Shows predicted class with confidence
+   - Compare: Shows both results side by side
+
+---
+
 ## Project Structure
 
 ```
-├── training.py           # YOLOv11 training script
-├── evaluate.py           # Model evaluation script
-├── test.py              # Test inference script
-├── app.py               # Flask REST API
-├── requirements.txt     # Python dependencies
-├── README.md            # This file
+├── cnn_model.py            # CNN model architectures
+├── cnn_training.py         # CNN training script
+├── cnn_evaluate.py         # CNN evaluation script
+├── compare_models.py       # YOLO vs CNN comparison script
+├── training.py            # YOLOv11 training script
+├── evaluate.py            # YOLOv11 evaluation script
+├── app.py                 # Flask REST API
+├── requirements.txt       # Python dependencies
+├── README.md              # This file
 │
-├── Deteksi_Daun.v2i.yolov11/   # Dataset (after extraction)
+├── Deteksi_Daun.v4i.yolov11/   # Dataset
 │   ├── train/
 │   ├── valid/
 │   ├── test/
 │   └── data.yaml
 │
-└── runs/
-    └── detect/
-        └── leaf_detection/
-            ├── weights/
-            │   ├── best.pt
-            │   └── last.pt
-            ├── train/
-            ├── val/
-            └── confusion_matrix.png
+├── runs/
+│   ├── cnn/
+│   │   ├── best_model.pth
+│   │   ├── training_history.png
+│   │   └── training_results.json
+│   │
+│   └── detect/
+│       └── leaf_detection/
+│           └── weights/
+│               ├── best.pt
+│               └── last.pt
+│
+└── templates/
+    └── index.html         # Web interface
 ```
 
 ---
 
 ## Configuration
 
-### Training Configuration
+### CNN Training Configuration
 
-Edit `training.py` to customize:
+Edit `cnn_training.py`:
 
 ```python
 # Model settings
+model_type = 'custom'  # custom, efficient, resnet
+epochs = 20
+batch_size = 16
+learning_rate = 0.001
+img_size = 224
+dropout_rate = 0.5
+```
+
+### YOLOv11 Training Configuration
+
+Edit `training.py`:
+
+```python
 MODEL_SIZE = "n"  # n, s, m, l, x
 IMGSZ = 640
 BATCH = 16
 EPOCHS = 50
-OPTIMIZER = "AdamW"
 ```
-
-### API Configuration
-
-Environment variables:
-- `MODEL_PATH`: Path to trained model
-- `CONFIDENCE_THRESHOLD`: Detection confidence threshold (default: 0.25)
-- `IOU_THRESHOLD`: IoU threshold for NMS (default: 0.45)
-- `HOST`: Server host (default: 0.0.0.0)
-- `PORT`: Server port (default: 5000)
-- `DEBUG`: Enable debug mode (default: false)
 
 ---
 
@@ -353,47 +413,37 @@ Environment variables:
 #### 1. CUDA Out of Memory
 
 Reduce batch size:
-```python
-BATCH = 8  # or 4
+```bash
+python cnn_training.py --batch 8
 ```
 
 #### 2. Model Not Found
 
-Ensure the model is trained:
+Ensure models are trained:
 ```bash
+# Train CNN
+python cnn_training.py
+
+# Train YOLOv11
 python training.py
 ```
 
-Or specify the model path:
-```bash
-python evaluate.py --model runs/detect/leaf_detection/weights/best.pt
-```
-
-#### 3. No Detections
-
-Lower the confidence threshold:
-```bash
-python test.py --conf 0.1
-```
-
-#### 4. Flask App Won't Start
+#### 3. Flask App Won't Start
 
 Check if port is in use:
 ```bash
-# Find process using port 5000
+# On Windows
 netstat -ano | findstr :5000
 
 # Kill the process
 taskkill /PID <PID> /F
 ```
 
-#### 5. GPU Not Detected
+#### 4. GPU Not Detected
 
-Verify CUDA installation:
 ```python
 import torch
 print(torch.cuda.is_available())
-print(torch.cuda.get_device_name(0))
 ```
 
 Install PyTorch with CUDA:
@@ -401,16 +451,25 @@ Install PyTorch with CUDA:
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 ```
 
+#### 5. Module Not Found Errors
+
+Reinstall dependencies:
+```bash
+pip install -r requirements.txt
+```
+
 ---
 
 ## Best Practices
 
 1. **Preprocessing**: Ensure images are in consistent format (JPG/PNG)
-2. **Confidence Threshold**: Adjust based on your use case (lower = more detections)
-3. **Model Selection**: Use larger models for better accuracy
-4. **Data Augmentation**: YOLOv11 applies augmentation automatically
+2. **Confidence Threshold**: Adjust based on your use case
+3. **Model Selection**: 
+   - Use CNN for single leaf classification
+   - Use YOLOv11 for multiple leaves with localization
+4. **Transfer Learning**: Use pretrained weights for better accuracy
 5. **Validation**: Always validate before testing
-6. **Version Control**: Keep the `best.pt` model safe
+6. **Comparison**: Use `compare_models.py` for thesis analysis
 
 ---
 
@@ -423,14 +482,30 @@ This project is for educational and research purposes.
 ## References
 
 - [Ultralytics YOLOv11 Documentation](https://docs.ultralytics.com/)
-- [YOLOv11 GitHub Repository](https://github.com/ultralytics/ultralytics)
-- [YOLO Format Annotation](https://docs.ultralytics.com/datasets/detect/)
+- [PyTorch Transfer Learning](https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html)
+- [EfficientNet Paper](https://arxiv.org/abs/1905.11946)
+- [ResNet Paper](https://arxiv.org/abs/1512.03385)
 
 ---
 
-## Support
+## Quick Start
 
-For issues and questions:
-1. Check the troubleshooting section
-2. Review Ultralytics documentation
-3. Check your dataset annotations
+```bash
+# 1. Install dependencies
+pip install -r requirements.txt
+
+# 2. Train CNN
+python cnn_training.py --model custom --epochs 20
+
+# 3. Train YOLOv11
+python training.py
+
+# 4. Run API
+python app.py
+
+# 5. Open browser
+# http://localhost:5000
+
+# 6. Compare models
+python compare_models.py --show-arch
+```
